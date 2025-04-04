@@ -10,6 +10,9 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(bodyParser.json());
 
+// Serve static files from the 'public' directory
+app.use(express.static(path.join(__dirname, "public")));
+
 // CSV File Path
 const CSV_FILE = path.join(__dirname, "reviews.csv");
 
@@ -24,6 +27,11 @@ function writeToCSV(review) {
     }
     fs.appendFileSync(CSV_FILE, csvRow, "utf8");
 }
+
+// Root Endpoint
+app.get("/", (req, res) => {
+    res.send("Welcome to the Event Review API!");
+});
 
 // Submit Review Endpoint
 app.post("/submit-review", (req, res) => {
@@ -55,8 +63,14 @@ app.get("/get-reviews", (req, res) => {
     res.json(data);
 });
 
+// Handle 404 for undefined routes
+app.use((req, res) => {
+    res.status(404).send("404 Not Found");
+});
+
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
+
 
 
