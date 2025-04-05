@@ -1,48 +1,63 @@
-// server.js
 import express from "express";
 import mongoose from "mongoose";
+import bodyParser from "body-parser";
 import cors from "cors";
 import Feedback from "./feedback.js";
 
 const app = express();
-app.use(cors()); // Allow frontend access
-app.use(express.json()); // Parse JSON
-
-// Replace with your MongoDB Atlas connection string
-const mongoURI = "mongodb+srv://sadityakumar194:12345@cluster0.hdmpeoz.mongodb.net/chiler?retryWrites=true&w=majority";
-
-mongoose.connect(mongoURI)
-  .then(() => console.log("✅ Connected to MongoDB Atlas"))
-  .catch((err) => console.error("❌ MongoDB connection error:", err));
-
-// POST: Save a new review
-app.post("/submit-review", async (req, res) => {
-  try {
-    const review = req.body;
-    const newFeedback = new Feedback(review);
-    await newFeedback.save();
-    console.log("✅ Saved to MongoDB:", newFeedback);
-    res.status(200).json({ message: "Review submitted successfully!" });
-  } catch (err) {
-    console.error("❌ Error saving review:", err.message);
-    res.status(500).json({ error: "Failed to submit review" });
-  }
-});
-
-// GET: Get all reviews (admin page)
-app.get("/reviews", async (req, res) => {
-  try {
-    const feedbacks = await Feedback.find().sort({ date: -1 });
-    res.status(200).json(feedbacks);
-  } catch (err) {
-    console.error("❌ Error fetching reviews:", err.message);
-    res.status(500).json({ error: "Failed to fetch reviews" });
-  }
-});
-
 const PORT = process.env.PORT || 3000;
+
+// Middleware
+app.use(cors());
+app.use(bodyParser.json());
+
+// ✅ MongoDB Connection
+try {
+  await mongoose.connect(
+    "mongodb+srv://<your-username>:<your-password>@cluster0.hdmpeoz.mongodb.net/chiler?retryWrites=true&w=majority"
+  );
+  console.log("✅ Connected to MongoDB Atlas");
+} catch (err) {
+  console.error("❌ MongoDB connection error:", err.message);
+}
+
+// ✅ Save Review API
+app.post("/submit-review", async (req, res) => {
+  const { name, event, reviewText } = req.body;
+
+  if (!name || !event || !reviewText) {
+    return res.status(400).json({ error: "All fields are required" });
+  }
+
+  const review = new Feedback({
+    name,
+    event,
+    reviewText,
+    date: new Date(),
+  });
+
+  try {
+    await review.save();
+    console.log("✅ Review saved to MongoDB");
+    res.json({ message: "Review saved successfully" });
+  } catch (err) {
+    console.error("❌ Failed to save review:", err.message);
+    res.status(500).json({ error: "Failed to save review" });
+  }
+});
+
+// ✅ Test MongoDB Connection Route
+app.get("/test-mongo", async (req, res) => {
+  try {
+    const count = await Feedback.countDocuments();
+    res.send(`✅ MongoDB connected. ${count} reviews in DB.`);
+  } catch (err) {
+    res.status(500).send("❌ MongoDB not connected properly");
+  }
+});
+
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
 
 
