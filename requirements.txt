@@ -1,0 +1,6 @@
+pymongo
+pandas
+transformers
+torch
+scikit-learn
+numpy
