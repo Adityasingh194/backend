@@ -1,10 +1,18 @@
 {
-  "name": "event-review-backend",
+  "name": "hackfest",
+  "version": "1.0.0",
+  "main": "server.js",
   "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
   "dependencies": {
+    "body-parser": "^2.2.0",
     "cors": "^2.8.5",
-    "express": "^4.18.2",
-    "mongoose": "^7.0.4"
+    "dotenv": "^16.3.1",
+    "express": "^5.1.0",
+    "fs": "^0.0.1-security",
+    "mongoose": "^8.13.2"
   }
 }
 
