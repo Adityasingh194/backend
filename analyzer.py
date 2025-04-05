@@ -1,21 +1,27 @@
-# analyzer.py
+import os
 import time
 import json
-import os
-from pymongo import MongoClient
 import pandas as pd
 from transformers import pipeline
-from collections import Counter
+from pymongo import MongoClient
+import spacy
 import re
+from collections import Counter
 
-MONGO_URI = os.getenv("MONGO_URI")
+# Load Spacy model
+nlp = spacy.load("en_core_web_sm")
+
+# Connect to MongoDB Atlas
+MONGO_URI = os.getenv("MONGO_URI") or "your_mongo_uri_here"
 client = MongoClient(MONGO_URI)
-db = client["eventReviews"]
+db = client["event_reviews"]
 collection = db["reviews"]
 
+# Load sentiment analysis model
 classifier = pipeline("sentiment-analysis", model="michellejieli/emotion_text_classifier")
 
-def preprocessing_data(text):
+# Preprocessing
+def clean_text(text):
     text = text.lower()
     text = re.sub(r'(?:#\w+\s*)+$', '', text)
     text = re.sub(r'#(\w+)', r'\1', text)
@@ -27,37 +33,56 @@ def preprocessing_data(text):
     text = re.sub(r'\s+', ' ', text).strip()
     return text
 
-def analyze_data():
-    reviews = list(collection.find())
-    if not reviews:
-        return
+def extract_keywords(texts):
+    words = []
+    for text in texts:
+        doc = nlp(text)
+        words += [token.lemma_ for token in doc if token.pos_ in ["NOUN", "ADJ", "VERB"]]
+    counter = Counter(words)
+    most_common = counter.most_common(5)
+    return [word for word, count in most_common]
 
-    df = pd.DataFrame(reviews)
-    if 'Content' not in df.columns:
-        return
+def analyze_sentiment(texts):
+    results = classifier(texts)
+    sentiments = [r["label"].lower() for r in results]
+    return sentiments
 
-    df['cleaned'] = df['Content'].apply(preprocessing_data)
-    df['sentiment'] = df['cleaned'].apply(lambda x: classifier(x)[0]['label'])
-
-    # Count sentiments
-    sentiment_counts = df['sentiment'].value_counts().to_dict()
-
-    # Extract top 5 keywords
-    all_words = ' '.join(df['cleaned']).split()
-    top_keywords = [word for word, count in Counter(all_words).most_common(5)]
-
-    output_data = {
-        'sentiments': sentiment_counts,
-        'keywords': top_keywords,
-        'timestamp': pd.Timestamp.now().isoformat()
+def write_json(sentiment_counts, keywords):
+    output = {
+        "sentiments": sentiment_counts,
+        "keywords": keywords
     }
-
     os.makedirs("public/data", exist_ok=True)
     with open("public/data/sentiment.json", "w") as f:
-        json.dump(output_data, f, indent=4)
+        json.dump(output, f)
+    print("✅ Updated public/data/sentiment.json")
 
-if __name__ == "__main__":
-    while True:
-        analyze_data()
-        print("Sentiment data updated.")
-        time.sleep(60)
+# Main loop
+while True:
+    try:
+        print("🔄 Running sentiment pipeline...")
+        docs = list(collection.find().sort("createdAt", -1).limit(200))
+        if not docs:
+            print("⚠️ No data found in MongoDB")
+            time.sleep(60)
+            continue
+
+        texts = [doc["Content"] for doc in docs if "Content" in doc]
+        cleaned = [clean_text(t) for t in texts]
+        sentiments = analyze_sentiment(cleaned)
+
+        sentiment_counts = {
+            "positive": sentiments.count("positive"),
+            "neutral": sentiments.count("neutral"),
+            "negative": sentiments.count("negative")
+        }
+
+        top_keywords = extract_keywords(cleaned)
+
+        write_json(sentiment_counts, top_keywords)
+    except Exception as e:
+        print(f"❌ Error: {e}")
+    
+    print("⏳ Sleeping for 60 seconds...")
+    time.sleep(60)
+
