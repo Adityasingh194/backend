@@ -1,6 +1,7 @@
-pymongo
-pandas
 transformers
-torch
+pandas
+spacy
+pymongo
 scikit-learn
-numpy
+torch
+sentence-transformers
