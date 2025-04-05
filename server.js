@@ -1,76 +1,50 @@
-const express = require("express");
-const cors = require("cors");
-const bodyParser = require("body-parser");
-const fs = require("fs");
-const path = require("path");
+// server.js
+import express from "express";
+import mongoose from "mongoose";
+import cors from "cors";
+import Feedback from "./feedback.js";
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+app.use(cors()); // Allow frontend access
+app.use(express.json()); // Parse JSON
 
-app.use(cors());
-app.use(bodyParser.json());
+// Replace with your MongoDB Atlas connection string
+const mongoURI = "mongodb+srv://sadityakumar194:12345@cluster0.hdmpeoz.mongodb.net/chiler?retryWrites=true&w=majority";
 
-// Serve static files from the 'public' directory
-app.use(express.static(path.join(__dirname, "public")));
+mongoose.connect(mongoURI)
+  .then(() => console.log("✅ Connected to MongoDB Atlas"))
+  .catch((err) => console.error("❌ MongoDB connection error:", err));
 
-// CSV File Path
-const CSV_FILE = path.join(__dirname, "reviews.csv");
-
-// Function to write data to CSV
-function writeToCSV(review) {
-    const { name, event, reviewText, date } = review;
-    const csvRow = `"${date}","${name}","${event}","${reviewText}"\n`;
-
-    // Check if file exists, if not add headers
-    if (!fs.existsSync(CSV_FILE)) {
-        fs.writeFileSync(CSV_FILE, `"Date","Name","Event","Review"\n`);
-    }
-    fs.appendFileSync(CSV_FILE, csvRow, "utf8");
-}
-
-// Root Endpoint
-app.get("/", (req, res) => {
-    res.send("Welcome to the Event Review API!");
-});
-
-// Submit Review Endpoint
-app.post("/submit-review", (req, res) => {
+// POST: Save a new review
+app.post("/submit-review", async (req, res) => {
+  try {
     const review = req.body;
-    if (!review.name || !review.event || !review.reviewText) {
-        return res.status(400).json({ error: "All fields are required" });
-    }
-
-    review.date = new Date().toLocaleString();
-    writeToCSV(review);
-    res.json({ message: "Review saved successfully" });
+    const newFeedback = new Feedback(review);
+    await newFeedback.save();
+    console.log("✅ Saved to MongoDB:", newFeedback);
+    res.status(200).json({ message: "Review submitted successfully!" });
+  } catch (err) {
+    console.error("❌ Error saving review:", err.message);
+    res.status(500).json({ error: "Failed to submit review" });
+  }
 });
 
-// Get Reviews Endpoint (Read CSV & send JSON)
-app.get("/get-reviews", (req, res) => {
-    if (!fs.existsSync(CSV_FILE)) {
-        return res.json([]);
-    }
-
-    const data = fs.readFileSync(CSV_FILE, "utf8")
-        .trim()
-        .split("\n")
-        .slice(1) // skip headers
-        .map(row => {
-            const [date, name, event, reviewText] = row.split(",").map(col => col.replace(/(^"|"$)/g, ""));
-            return { date, name, event, reviewText };
-        });
-
-    res.json(data);
+// GET: Get all reviews (admin page)
+app.get("/reviews", async (req, res) => {
+  try {
+    const feedbacks = await Feedback.find().sort({ date: -1 });
+    res.status(200).json(feedbacks);
+  } catch (err) {
+    console.error("❌ Error fetching reviews:", err.message);
+    res.status(500).json({ error: "Failed to fetch reviews" });
+  }
 });
 
-// Handle 404 for undefined routes
-app.use((req, res) => {
-    res.status(404).send("404 Not Found");
-});
-
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
+
 
 
 
